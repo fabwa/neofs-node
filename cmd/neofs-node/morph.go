@@ -100,7 +100,7 @@ func listenMorphNotifications(c *cfg) {
 	lis.RegisterHeaderHandler(func(block *block.Header) {
 		c.log.Debug("new block", zap.Uint32("index", block.Index))
 
-		c.cfgMorph.epochTimers.UpdateTime(block.Timestamp)
+		c.cfgMorph.epochTimers.UpdateTime(block.Timestamp, block.Index)
 		c.networkState.block.Store(block.Index)
 		c.chainTime.Set(block.Timestamp)
 

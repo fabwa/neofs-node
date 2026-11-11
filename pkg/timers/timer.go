@@ -10,13 +10,17 @@ type (
 	// expires.
 	Tick func()
 
+	// DeltaTick is a handler of [SubEpochTick]. blockIndex is the index of the
+	// block that triggered the tick.
+	DeltaTick func(blockIndex uint32)
+
 	// SubEpochTick is like a [Tick] but will be executed every epoch at:
 	// epochDuration * [SubEpochTick.EpochMul] / [SubEpochTick.EpochDiv].
 	// [SubEpochTick.EpochDiv] must not be zero.
 	SubEpochTick struct {
-		Tick     Tick   // handle to execute
-		EpochMul uint32 // X: X/Y of epoch in seconds
-		EpochDiv uint32 // Y: X/Y of epoch in seconds
+		Tick     DeltaTick // handle to execute
+		EpochMul uint32    // X: X/Y of epoch in seconds
+		EpochDiv uint32    // Y: X/Y of epoch in seconds
 	}
 
 	// EpochTicks defines start epoch timers and epoch subtimers for [NewTimers].
@@ -31,7 +35,7 @@ type (
 		done       bool
 
 		mul, div uint64
-		tick     Tick
+		tick     DeltaTick
 	}
 )
 
@@ -50,8 +54,8 @@ type EpochTimers struct {
 
 // UpdateTime must be called every time [EpochTimers] user receives information
 // about chain's new block acceptance. curr must be just-arrived block's
-// timestamp.
-func (et *EpochTimers) UpdateTime(curr uint64) {
+// timestamp, index must be its index.
+func (et *EpochTimers) UpdateTime(curr uint64, index uint32) {
 	et.m.Lock()
 	defer et.m.Unlock()
 
@@ -67,7 +71,7 @@ func (et *EpochTimers) UpdateTime(curr uint64) {
 	}
 	for _, dh := range et.deltaHandlers {
 		if !dh.done && dh.nextTickAt <= curr {
-			dh.tick()
+			dh.tick(index)
 			dh.done = true
 		}
 	}
