@@ -44,6 +44,19 @@ func TestIsVerbCompatible(t *testing.T) {
 				"%v in token, %s executing", verb, op)
 		}
 	}
+
+	t.Run("object-limited", func(t *testing.T) {
+		var tok session.Object
+		tok.LimitByObjects(oidtest.ID())
+
+		tok.ForVerb(session.VerbObjectDelete)
+		require.False(t, assertVerb(tok, session.VerbObjectSearch))
+		require.True(t, assertVerb(tok, session.VerbObjectHead))
+		require.True(t, assertVerb(tok, session.VerbObjectDelete))
+
+		tok.ForVerb(session.VerbObjectSearch)
+		require.True(t, assertVerb(tok, session.VerbObjectSearch))
+	})
 }
 
 func TestAssertSessionRelation(t *testing.T) {
@@ -70,6 +83,12 @@ func TestAssertSessionRelation(t *testing.T) {
 	tok.LimitByObjects(obj)
 
 	// test fixed object session (here obj arg must be non-nil everywhere)
+	require.NoError(t, assertSessionRelation(tok, cnr, obj))
+	require.Error(t, assertSessionRelation(tok, cnr, objOther))
+
+	// removal sessions are bound to their objects too
+	tok.ForVerb(session.VerbObjectDelete)
+	require.NoError(t, assertSessionRelation(tok, cnr, oid.ID{}))
 	require.NoError(t, assertSessionRelation(tok, cnr, obj))
 	require.Error(t, assertSessionRelation(tok, cnr, objOther))
 }

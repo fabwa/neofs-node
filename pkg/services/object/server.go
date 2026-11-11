@@ -542,15 +542,18 @@ func (s *Server) Put(gStream protoobject.ObjectService_PutServer) error {
 		}
 
 		op, verb, verbV1 := acl.OpObjectPut, sessionv2.VerbObjectPut, session.VerbObjectPut
+		sessionObj := objID
 		tombstone := initPart.GetHeader().GetObjectType() == protoobject.ObjectType_TOMBSTONE
 		if tombstone {
 			// such objects are specific - saving them is essentially the removal of other
 			// objects
 			op, verb, verbV1 = acl.OpObjectDelete, sessionv2.VerbObjectDelete, session.VerbObjectDelete
+			// user can't predict tomb's ID, so it is not checked against the session
+			sessionObj = oid.ID{}
 		}
 
 		// another error variable to not shadow err used in defer
-		reqMD, metaHdrErr := s.handleRequestMetaHeader(req.MetaHeader, verb, verbV1, cnrID, objID)
+		reqMD, metaHdrErr := s.handleRequestMetaHeader(req.MetaHeader, verb, verbV1, cnrID, sessionObj)
 		if metaHdrErr != nil {
 			err = metaHdrErr // defer
 			return s.sendStatusPutResponse(gStream, err, reqFirst)

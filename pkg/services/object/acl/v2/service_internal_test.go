@@ -29,6 +29,7 @@ import (
 	"github.com/nspcc-dev/neofs-sdk-go/eacl"
 	"github.com/nspcc-dev/neofs-sdk-go/netmap"
 	oid "github.com/nspcc-dev/neofs-sdk-go/object/id"
+	oidtest "github.com/nspcc-dev/neofs-sdk-go/object/id/test"
 	protoobject "github.com/nspcc-dev/neofs-sdk-go/proto/object"
 	"github.com/nspcc-dev/neofs-sdk-go/proto/refs"
 	protosession "github.com/nspcc-dev/neofs-sdk-go/proto/session"
@@ -109,6 +110,65 @@ func BenchmarkSessionTokenVerification(b *testing.B) {
 		require.NoError(b, err)
 		s.ResetTokenCheckCache()
 	}
+}
+
+func TestVerifySessionV1TokenMessage_ObjectDelete(t *testing.T) {
+	cnr := cidtest.ID()
+	obj := oidtest.ID()
+	objOther := oidtest.ID()
+	owner := usertest.User()
+	recipient := usertest.User()
+
+	s := New(nopFSChain{},
+		isessions.NewObjectSessionsCache(1),
+		WithIRFetcher(nopIR{}),
+		WithNetmapper(nopNetmapContract{}),
+		WithContainerSource(nopContrainerContract{}),
+		WithTimeProvider(mockChainTime{}),
+	)
+
+	signToken := func(t *testing.T, objs ...oid.ID) *protosession.SessionToken {
+		var tok session.Object
+		tok.SetID(uuid.New())
+		tok.ForVerb(session.VerbObjectDelete)
+		tok.BindContainer(cnr)
+		tok.LimitByObjects(objs...)
+		tok.SetExp(1)
+		tok.SetAuthKey(recipient.Public())
+		require.NoError(t, tok.Sign(owner))
+		return tok.ProtoMessage()
+	}
+
+	t.Run("object-limited", func(t *testing.T) {
+		msg := signToken(t, obj)
+		for _, tc := range []struct {
+			name string
+			verb session.ObjectVerb
+			obj  oid.ID
+			ok   bool
+		}{
+			{name: "delete named", verb: session.VerbObjectDelete, obj: obj, ok: true},
+			{name: "head named", verb: session.VerbObjectHead, obj: obj, ok: true},
+			{name: "tombstone put", verb: session.VerbObjectDelete, obj: oid.ID{}, ok: true},
+			{name: "delete other", verb: session.VerbObjectDelete, obj: objOther},
+			{name: "head other", verb: session.VerbObjectHead, obj: objOther},
+			{name: "search", verb: session.VerbObjectSearch, obj: oid.ID{}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := s.VerifySessionV1TokenMessage(msg, tc.verb, cnr, tc.obj)
+				if tc.ok {
+					require.NoError(t, err)
+				} else {
+					require.Error(t, err)
+				}
+			})
+		}
+	})
+
+	t.Run("container-wide search", func(t *testing.T) {
+		_, err := s.VerifySessionV1TokenMessage(signToken(t), session.VerbObjectSearch, cnr, oid.ID{})
+		require.NoError(t, err)
+	})
 }
 
 func BenchmarkBearerTokenVerification(b *testing.B) {

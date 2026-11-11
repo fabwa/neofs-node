@@ -9,6 +9,7 @@ Changelog for NeoFS Node
 - Policer could drop the only verified local replica of an object when one primary was under maintenance and another's HEAD request failed transiently (#4291)
 - A container node could crash the SearchV2 aggregating node by replying with zero attributes to an attribute-less, non-equality-filtered query (#4292)
 - Config parsing panicked instead of returning a clean error when a struct-slice field (e.g. `grpc`, shards) was given the wrong YAML shape, including via SIGHUP reload on a running node (#4282)
+- An object session token for deleting particular objects allowed HEAD of any object and SEARCH in the whole container (#2)
 
 ### Changed
 
