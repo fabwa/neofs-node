@@ -773,7 +773,7 @@ func (c *Client) notaryTxValidationLimit(conn *connection) (uint32, error) {
 		return 0, fmt.Errorf("can't get current blockchain height: %w", err)
 	}
 
-	minIndex := bc + c.notary.txValidTime
+	minIndex := c.VUBFromHeight(bc)
 	rounded := (minIndex/c.notary.roundTime + 1) * c.notary.roundTime
 
 	return rounded, nil
@@ -903,7 +903,16 @@ func (c *Client) CalculateNonceAndVUB(hash util.Uint256) (nonce uint32, vub uint
 		return 0, 0, fmt.Errorf("could not get transaction height: %w", err)
 	}
 
-	return nonce, height + c.notary.txValidTime, nil
+	return nonce, c.VUBFromHeight(height), nil
+}
+
+// VUBFromHeight returns `validUntilBlock` for notary request's main transaction
+// anchored at the given FS chain height. Returns zero if notary is disabled.
+func (c *Client) VUBFromHeight(height uint32) uint32 {
+	if c.notary == nil {
+		return 0
+	}
+	return height + c.notary.txValidTime
 }
 
 func (c *Client) getTransactionHeight(conn *connection, h util.Uint256) (uint32, error) {

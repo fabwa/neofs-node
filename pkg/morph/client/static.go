@@ -108,6 +108,7 @@ type InvokePrmOptional struct {
 	signByAlphabet bool
 
 	nonce *uint32
+	vub   *uint32
 }
 
 // SetHash sets optional hash of the transaction.
@@ -129,6 +130,12 @@ func (i *InvokePrmOptional) RequireAlphabetSignature() {
 // SetNonce sets optional nonce only for notary request's main transaction.
 func (i *InvokePrmOptional) SetNonce(nonce uint32) {
 	i.nonce = &nonce
+}
+
+// SetVUB sets optional `validUntilBlock` only for notary request's main
+// transaction. Overrides the value calculated from hash.
+func (i *InvokePrmOptional) SetVUB(vub uint32) {
+	i.vub = &vub
 }
 
 // CallWithAlphabetWitness sends transaction calling given method of underlying
@@ -173,6 +180,9 @@ func (s StaticClient) Invoke(prm InvokePrm) error {
 			}
 			if prm.nonce != nil {
 				nonce = *prm.nonce
+			}
+			if prm.vub != nil {
+				vubP = prm.vub
 			}
 
 			invokeFunc = func() error {
