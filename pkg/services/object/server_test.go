@@ -62,6 +62,8 @@ import (
 	sessionv2 "github.com/nspcc-dev/neofs-sdk-go/session/v2"
 	"github.com/nspcc-dev/neofs-sdk-go/stat"
 	"github.com/nspcc-dev/neofs-sdk-go/user"
+	usertest "github.com/nspcc-dev/neofs-sdk-go/user/test"
+	"github.com/nspcc-dev/neofs-sdk-go/version"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -1102,4 +1104,95 @@ type mockGRPCConn struct {
 
 func (x *mockGRPCConn) ForAnyGRPCConn(ctx context.Context, f func(context.Context, *grpc.ClientConn) error) error {
 	return f(ctx, x.conn)
+}
+
+type putOnlyHandler struct {
+	noCallObjectService
+}
+
+func (putOnlyHandler) Put(context.Context) (*putsvc.Streamer, error) {
+	return nil, nil
+}
+
+type sessionV1ObjectRecorder struct {
+	nopReqInfoExtractor
+	obj *oid.ID
+}
+
+var errRecordedSession = errors.New("session recorded")
+
+func (x sessionV1ObjectRecorder) VerifySessionV1TokenMessage(_ *protosession.SessionToken, _ session.ObjectVerb, _ cid.ID, obj oid.ID) (session.Object, error) {
+	*x.obj = obj
+	return session.Object{}, errRecordedSession
+}
+
+type singlePutRequestStream struct {
+	grpc.ServerStream
+	req  *protoobject.PutRequest
+	resp *protoobject.PutResponse
+}
+
+func (x *singlePutRequestStream) Context() context.Context { return context.Background() }
+
+func (x *singlePutRequestStream) Recv() (*protoobject.PutRequest, error) {
+	if x.req == nil {
+		return nil, io.EOF
+	}
+	req := x.req
+	x.req = nil
+	return req, nil
+}
+
+func (x *singlePutRequestStream) SendAndClose(resp *protoobject.PutResponse) error {
+	x.resp = resp
+	return nil
+}
+
+func TestServer_Put_SessionObject(t *testing.T) {
+	signer := usertest.User()
+	cnr := cidtest.ID()
+	objID := oidtest.ID()
+
+	for _, tc := range []struct {
+		name     string
+		typ      protoobject.ObjectType
+		expected oid.ID
+	}{
+		{name: "regular", typ: protoobject.ObjectType_REGULAR, expected: objID},
+		// tombstone ID is unknown to the session issuer
+		{name: "tombstone", typ: protoobject.ObjectType_TOMBSTONE, expected: oid.ID{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotObj oid.ID
+			srv := New(putOnlyHandler{}, nopFSChain{}, nil, nil, signer.ECDSAPrivateKey, nopMetrics{}, nopACLChecker{},
+				sessionV1ObjectRecorder{obj: &gotObj}, nil, fixedFutureTimeProvider{}, zap.NewNop())
+
+			req := &protoobject.PutRequest{
+				Body: &protoobject.PutRequest_Body{
+					ObjectPart: &protoobject.PutRequest_Body_Init_{Init: &protoobject.PutRequest_Body_Init{
+						ObjectId: objID.ProtoMessage(),
+						Header: &protoobject.Header{
+							ContainerId: cnr.ProtoMessage(),
+							ObjectType:  tc.typ,
+						},
+					}},
+				},
+				MetaHeader: &protosession.RequestMetaHeader{
+					Version:        version.Current().ProtoMessage(),
+					Ttl:            2,
+					ValidUntilTime: uint64(time.Now().Add(5 * time.Minute).UTC().Unix()),
+					SessionToken:   new(protosession.SessionToken),
+				},
+			}
+			var err error
+			req.VerifyHeader, err = neofscrypto.SignRequestWithBuffer(signer, req, nil)
+			require.NoError(t, err)
+
+			stream := &singlePutRequestStream{req: req}
+			require.NoError(t, srv.Put(stream))
+			require.NotNil(t, stream.resp)
+			require.Contains(t, stream.resp.MetaHeader.GetStatus().GetMessage(), errRecordedSession.Error())
+			require.Equal(t, tc.expected, gotObj)
+		})
+	}
 }
