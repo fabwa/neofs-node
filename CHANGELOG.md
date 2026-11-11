@@ -6,6 +6,7 @@ Changelog for NeoFS Node
 ### Added
 
 ### Fixed
+- Basic income payments could be lost when Alphabet nodes computed different notary transaction validity (#5)
 
 ### Changed
 

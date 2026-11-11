@@ -10,13 +10,15 @@ import (
 
 // SettleContainerPayment invokes transfers from container's owner to storage
 // nodes that maintain objects inside the container. Always sends a notary
-// request with Alphabet multi-signature. Always awaits transaction inclusion.
-func (c *Client) SettleContainerPayment(epoch uint64, cID cid.ID) error {
+// request with Alphabet multi-signature. Transaction validity is derived from
+// blockIndex that must be the same for all Alphabet nodes.
+func (c *Client) SettleContainerPayment(epoch uint64, blockIndex uint32, cID cid.ID) error {
 	prm := client.InvokePrm{}
 	prm.SetMethod(fschaincontracts.PayBalanceMethod)
 	prm.SetArgs(cID[:])
 	prm.RequireAlphabetSignature()
 	prm.SetNonce(uint32(epoch))
+	prm.SetVUB(c.client.Morph().VUBFromHeight(blockIndex))
 
 	err := c.client.Invoke(prm)
 	if err != nil {

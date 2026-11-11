@@ -38,17 +38,17 @@ func (p *Processor) HandleBasicIncomeEvent(e event.Event) {
 
 	l.Info("start basic income distribution...", zap.Int("numberOfContainers", len(cnrs)))
 
-	p.sendPaymentTXs(l, epoch, cnrs)
+	p.sendPaymentTXs(l, epoch, ev.BlockIndex(), cnrs)
 
 	l.Info("finished basic income distribution")
 }
 
-func (p *Processor) sendPaymentTXs(l *zap.Logger, epoch uint64, cnrs []cid.ID) {
+func (p *Processor) sendPaymentTXs(l *zap.Logger, epoch uint64, blockIndex uint32, cnrs []cid.ID) {
 	var wg errgroup.Group
 	wg.SetLimit(parallelFactor)
 	for _, cID := range cnrs {
 		wg.Go(func() error {
-			err := p.balanceClient.SettleContainerPayment(epoch, cID)
+			err := p.balanceClient.SettleContainerPayment(epoch, blockIndex, cID)
 			if err != nil {
 				l.Error("could not send payment transaction", zap.Stringer("cID", cID), zap.Error(err))
 				return nil

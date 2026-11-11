@@ -204,7 +204,7 @@ func (s *Server) Start(ctx context.Context, intError chan<- error) (err error) {
 			zap.Uint32("index", b.Index),
 		)
 
-		s.epochTimers.UpdateTime(b.Timestamp)
+		s.epochTimers.UpdateTime(b.Timestamp, b.Index)
 		s.chainTime.Set(b.Timestamp)
 
 		err = s.persistate.SetUInt32(persistateFSChainLastBlockKey, b.Index)
@@ -907,14 +907,19 @@ func New(ctx context.Context, log *zap.Logger, cfg *config.Config, errChan chan<
 }
 
 func initTimers(server *Server, cfg *config.Config, paymentProcessor *settlement.Processor) {
-	basicIncomeTick, stopBasicIncomeFunc := util.SingleAsyncExecutingInstance(func() {
+	var basicIncomeBlock atomic.Uint32
+	basicIncomeHandler, stopBasicIncomeFunc := util.SingleAsyncExecutingInstance(func() {
 		epochN := server.EpochCounter()
 		if epochN == 0 { // estimates are invalid in genesis epoch
 			return
 		}
 
-		paymentProcessor.HandleBasicIncomeEvent(settlement.NewBasicIncomeEvent(epochN - 1))
+		paymentProcessor.HandleBasicIncomeEvent(settlement.NewBasicIncomeEvent(epochN-1, basicIncomeBlock.Load()))
 	})
+	basicIncomeTick := func(blockIndex uint32) {
+		basicIncomeBlock.Store(blockIndex)
+		basicIncomeHandler()
+	}
 	server.closers = append(server.closers, func() error { stopBasicIncomeFunc(); return nil })
 
 	epochH, stopEpochHandlerFunc := util.SingleAsyncExecutingInstance(server.netmapProcessor.HandleNewEpochTick)
