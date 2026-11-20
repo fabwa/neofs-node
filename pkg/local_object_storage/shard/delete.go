@@ -2,6 +2,7 @@ package shard
 
 import (
 	"errors"
+	"syscall"
 
 	"github.com/nspcc-dev/neofs-node/pkg/local_object_storage/writecache"
 	apistatus "github.com/nspcc-dev/neofs-sdk-go/client/status"
@@ -40,8 +41,18 @@ func (s *Shard) deleteObjs(cnr cid.ID, addrs []oid.ID) error {
 		}
 	}
 
-	res, diff, err := s.metaBase.Delete(cnr, addrs)
+	res, diff, err := s.metaBaseIface.Delete(cnr, addrs)
 	if err != nil {
+		if len(addrs) > 1 && errors.Is(err, syscall.ENOSPC) {
+			// The transaction does not fit into the space the metabase has
+			// left. A smaller one can, and the payload removed after it makes
+			// room for the next one.
+			half := len(addrs) / 2
+			err = s.deleteObjs(cnr, addrs[:half])
+			if err2 := s.deleteObjs(cnr, addrs[half:]); err == nil {
+				err = err2
+			}
+		}
 		return err // stop on metabase error ?
 	}
 

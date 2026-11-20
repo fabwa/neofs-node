@@ -7,6 +7,7 @@ Changelog for NeoFS Node
 - Support for minimum EC parts required for successful PUT (#4267)
 
 ### Fixed
+- GC removed nothing from a shard whose metabase filesystem is full (#4319)
 - Shard object counters lost the objects of removed containers on restart and went below the real values as GC deleted them (#4335)
 - Incorrect eACL `NOT_PRESENT` matching for SEARCH and DELETE (#4302)
 - Shard `payload_size` and `gc` object counter metrics drifting negative on long-running nodes (#4308)

@@ -20,6 +20,7 @@ type metabase interface {
 	ResolveECPart(cnr cid.ID, parent oid.ID, pi iec.PartInfo) (oid.ID, error)
 	ResolveECPartWithPayloadLen(cnr cid.ID, parent oid.ID, pi iec.PartInfo) (oid.ID, uint64, error)
 	PutCounted(*object.Object) (meta.CountersDiff, error)
+	Delete(cid.ID, []oid.ID) ([]oid.ID, meta.CountersDiff, error)
 }
 
 // Shard represents single shard of NeoFS Local Storage Engine.

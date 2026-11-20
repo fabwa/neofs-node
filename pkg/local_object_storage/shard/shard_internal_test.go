@@ -453,6 +453,10 @@ func (unimplementedMetabase) PutCounted(*object.Object) (meta.CountersDiff, erro
 	panic("unimplemented")
 }
 
+func (unimplementedMetabase) Delete(cid.ID, []oid.ID) ([]oid.ID, meta.CountersDiff, error) {
+	panic("unimplemented")
+}
+
 type unimplementedMetricsWriter struct{}
 
 func (unimplementedMetricsWriter) SetObjectCounter(string, uint64) {
